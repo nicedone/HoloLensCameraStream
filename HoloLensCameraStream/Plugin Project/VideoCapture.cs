@@ -232,7 +232,9 @@ namespace HoloLensCameraStream
             await _frameReader.StartAsync();
             VideoEncodingProperties properties = GetVideoEncodingPropertiesForCameraParams(setupParams);
             
-            properties.Properties.Add(ROTATION_KEY, 180);
+			if ( setupParams.flip )
+	            properties.Properties.Add(ROTATION_KEY, 180);
+
             await _mediaCapture.VideoDeviceController.SetMediaStreamPropertiesAsync(STREAM_TYPE, properties);
 
             onVideoModeStartedCallback?.Invoke(new VideoCaptureResult(0, ResultType.Success, true));

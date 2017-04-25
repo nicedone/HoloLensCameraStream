@@ -33,16 +33,23 @@ namespace HoloLensCameraStream
         /// </summary>
         public int frameRate;
 
+		/// <summary>
+        /// Rotate image 180 degrees.
+        /// </summary>
+        public bool flip;
+
         public CameraParameters(
             CapturePixelFormat pixelFormat = CapturePixelFormat.BGRA32,
             int cameraResolutionHeight = 720,
             int cameraResolutionWidth = 1280,
-            int frameRate = 30)
+            int frameRate = 30,
+			bool flip = true)
         {
             this.pixelFormat = pixelFormat;
             this.cameraResolutionHeight = cameraResolutionHeight;
             this.cameraResolutionWidth = cameraResolutionWidth;
             this.frameRate = frameRate;
+			this.flip = flip;
         }
     }
 }

@@ -17,11 +17,14 @@ namespace HoloLensCameraStream
 
         public int frameRate;
 
+		public bool flip;
+
         public CameraParameters(
             CapturePixelFormat pixelFormat = CapturePixelFormat.BGRA32,
             int cameraResolutionHeight = 720,
             int cameraResolutionWidth = 1280,
-            int frameRate = 30)
+            int frameRate = 30,
+			bool flip = true)
         { throw new NotImplementedException(); }
     }
 }
