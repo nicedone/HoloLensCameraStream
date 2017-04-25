@@ -19,6 +19,23 @@ namespace HoloLensCameraStream
 
 		public bool flip;
 
+		public float hologramOpacity;
+		public bool enableHolograms
+		{
+			get {	return hologramOpacity > 0.0f; }
+			set {	hologramOpacity = value ? 1.0f : 0.0f; }
+		}
+
+
+        public bool enableRecordingIndicator;
+
+ 		public int videoStabilizationBufferSize;
+		public bool enableVideoStabilization
+		{
+			get {	return videoStabilizationBufferSize > 0; }
+			set {	videoStabilizationBufferSize = value ? 15 : 0; }
+		}
+
         public CameraParameters(
             CapturePixelFormat pixelFormat = CapturePixelFormat.BGRA32,
             int cameraResolutionHeight = 720,
