@@ -241,7 +241,7 @@ namespace HoloLensCameraStream
 
 			//	gr: taken from here https://forums.hololens.com/discussion/2009/mixedrealitycapture
 			IVideoEffectDefinition ved = new VideoMRCSettings( setupParams.enableHolograms, setupParams.enableRecordingIndicator, setupParams.enableVideoStabilization, setupParams.videoStabilizationBufferSize, setupParams.hologramOpacity );
-			await _mediaCapture.AddVideoEffectAsync(ved, MediaStreamType.Photo);
+			await _mediaCapture.AddVideoEffectAsync(ved, MediaStreamType.VideoPreview);
         
             await _mediaCapture.VideoDeviceController.SetMediaStreamPropertiesAsync(STREAM_TYPE, properties);
 
