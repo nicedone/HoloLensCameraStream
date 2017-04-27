@@ -12,8 +12,12 @@ using Windows.Devices.Enumeration;
 using Windows.Media.Capture;
 using Windows.Media.Capture.Frames;
 using Windows.Media.MediaProperties;
+using Windows.Media.Effects;
+using Windows.Foundation.Collections;
 using Windows.Foundation;
 using System.Diagnostics;
+
+
 
 namespace HoloLensCameraStream
 {
@@ -232,7 +236,13 @@ namespace HoloLensCameraStream
             await _frameReader.StartAsync();
             VideoEncodingProperties properties = GetVideoEncodingPropertiesForCameraParams(setupParams);
             
-            properties.Properties.Add(ROTATION_KEY, 180);
+			if ( setupParams.flip )
+	            properties.Properties.Add(ROTATION_KEY, 180);
+
+			//	gr: taken from here https://forums.hololens.com/discussion/2009/mixedrealitycapture
+			IVideoEffectDefinition ved = new VideoMRCSettings( setupParams.enableHolograms, setupParams.enableRecordingIndicator, setupParams.enableVideoStabilization, setupParams.videoStabilizationBufferSize, setupParams.hologramOpacity );
+			await _mediaCapture.AddVideoEffectAsync(ved, MediaStreamType.VideoPreview);
+        
             await _mediaCapture.VideoDeviceController.SetMediaStreamPropertiesAsync(STREAM_TYPE, properties);
 
             onVideoModeStartedCallback?.Invoke(new VideoCaptureResult(0, ResultType.Success, true));
@@ -398,6 +408,38 @@ namespace HoloLensCameraStream
                 default:
                     return MediaEncodingSubtypes.Bgra8;
             }
+        }
+    }
+
+
+	//	from https://forums.hololens.com/discussion/2009/mixedrealitycapture
+	public class VideoMRCSettings : IVideoEffectDefinition
+    {
+        public string ActivatableClassId
+        {
+            get
+            {
+                return "Windows.Media.MixedRealityCapture.MixedRealityCaptureVideoEffect";
+            }
+        }
+
+        public IPropertySet Properties
+        {
+            get
+            {
+                return _Properties;
+            }
+        }
+
+        private IPropertySet _Properties;
+        public VideoMRCSettings(bool HologramCompositionEnabled,bool RecordingIndicatorEnabled,bool VideoStabilizationEnabled,int VideoStabilizationBufferLength,float GlobalOpacityCoefficient)
+        {
+            _Properties = (IPropertySet)new PropertySet();
+            _Properties.Add("HologramCompositionEnabled", HologramCompositionEnabled);
+            _Properties.Add("RecordingIndicatorEnabled", RecordingIndicatorEnabled);
+            _Properties.Add("VideoStabilizationEnabled", VideoStabilizationEnabled);
+            _Properties.Add("VideoStabilizationBufferLength", VideoStabilizationBufferLength);
+            _Properties.Add("GlobalOpacityCoefficient", GlobalOpacityCoefficient);
         }
     }
 }
