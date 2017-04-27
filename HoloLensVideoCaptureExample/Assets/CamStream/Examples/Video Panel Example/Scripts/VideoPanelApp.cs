@@ -53,11 +53,15 @@ public class VideoPanelApp : MonoBehaviour
         float frameRate = CameraStreamHelper.Instance.GetHighestFrameRate(_resolution);
         videoCapture.FrameSampleAcquired += OnFrameSampleAcquired;
 
+        //You don't need to set all of these params.
+        //I'm just adding them to show you that they exist.
         CameraParameters cameraParams = new CameraParameters();
         cameraParams.cameraResolutionHeight = _resolution.height;
         cameraParams.cameraResolutionWidth = _resolution.width;
         cameraParams.frameRate = Mathf.RoundToInt(frameRate);
         cameraParams.pixelFormat = CapturePixelFormat.BGRA32;
+        cameraParams.rotateImage180Degrees = true; //If your image is upside down, remove this line.
+        cameraParams.enableHolograms = false;
 
         UnityEngine.WSA.Application.InvokeOnAppThread(() => { _videoPanelUI.SetResolution(_resolution.width, _resolution.height); }, false);
 
