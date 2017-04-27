@@ -1,3 +1,5 @@
+The most up-to-date documentation is available on GitHub: https://github.com/VulcanTechnologies/HoloLensCameraStream
+
 # HoloLensCameraStream for Unity
 This Unity plugin makes the HoloLens video camera frames available to a Unity app in real time. This enables Unity devs to easily use the HoloLens camera for computer vision (or anything they want).
 
