@@ -23,6 +23,11 @@ public class CameraStreamHelper : MonoBehaviour
         }
     }
 
+    public void SetNativeISpatialCoordinateSystemPtr(IntPtr ptr)
+    {
+        videoCapture.WorldOriginPtr = ptr;
+    }
+
     public void GetVideoCaptureAsync(OnVideoCaptureResourceCreatedCallback onVideoCaptureAvailable)
     {
         if (onVideoCaptureAvailable == null)

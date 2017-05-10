@@ -26,12 +26,12 @@ namespace HoloLensCameraStream
             throw new NotImplementedException();
         }
 
-        public byte[] TryGetCameraToWorldMatrix()
+        public bool TryGetCameraToWorldMatrix(out float[] targetMatrix)
         {
             throw new NotImplementedException();
         }
 
-        public byte[] TryGetProjectionMatrix()
+        public bool TryGetProjectionMatrix(out float[] targetMatrix)
         {
             throw new NotImplementedException();
         }

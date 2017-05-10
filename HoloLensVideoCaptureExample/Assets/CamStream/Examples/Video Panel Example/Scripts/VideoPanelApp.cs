@@ -4,6 +4,9 @@
 //
 
 using UnityEngine;
+using UnityEngine.VR.WSA;
+
+using System;
 
 using HoloLensCameraStream;
 
@@ -20,8 +23,13 @@ public class VideoPanelApp : MonoBehaviour
     VideoPanel _videoPanelUI;
     VideoCapture _videoCapture;
 
+    IntPtr _spatialCoordinateSystemPtr; 
+
     void Start()
     {
+        //Fetch a pointer to Unity's spatial coordinate system if you need pixel mapping
+        _spatialCoordinateSystemPtr = WorldManager.GetNativeISpatialCoordinateSystemPtr();
+
         //Call this in Start() to ensure that the CameraStreamHelper is already "Awake".
         CameraStreamHelper.Instance.GetVideoCaptureAsync(OnVideoCaptureCreated);
         //You could also do this "shortcut":
@@ -48,6 +56,9 @@ public class VideoPanelApp : MonoBehaviour
         }
         
         this._videoCapture = videoCapture;
+
+        //Request the spatial coordinate ptr if you want fetch the camera and set it if you need to 
+        CameraStreamHelper.Instance.SetNativeISpatialCoordinateSystemPtr(_spatialCoordinateSystemPtr);
 
         _resolution = CameraStreamHelper.Instance.GetLowestResolution();
         float frameRate = CameraStreamHelper.Instance.GetHighestFrameRate(_resolution);
@@ -88,6 +99,21 @@ public class VideoPanelApp : MonoBehaviour
             _latestImageBytes = new byte[sample.dataLength];
         }
         sample.CopyRawImageDataIntoBuffer(_latestImageBytes);
+        
+        //If you need to get the cameraToWorld matrix for purposes of compositing you can do it like this
+        float[] cameraToWorldMatrix;
+        if (sample.TryGetCameraToWorldMatrix(out cameraToWorldMatrix) == false)
+        {
+            return;
+        }
+
+        //If you need to get the projection matrix for purposes of compositing you can do it like this
+        float[] projectionMatrix;
+        if (sample.TryGetProjectionMatrix(out projectionMatrix) == false)
+        {
+            return;
+        }
+
         sample.Dispose();
 
         //This is where we actually use the image data
@@ -95,5 +121,28 @@ public class VideoPanelApp : MonoBehaviour
         {
             _videoPanelUI.SetBytes(_latestImageBytes);
         }, false);
+    }
+
+    Matrix4x4 ConvertFloatArrayToMatrix4x4(float[] matrixAsArray)
+    {
+        Matrix4x4 m = new Matrix4x4();
+        m.m00 = matrixAsArray[0];
+        m.m01 = matrixAsArray[1];
+        m.m02 = matrixAsArray[2];
+        m.m03 = matrixAsArray[3];
+        m.m10 = matrixAsArray[4];
+        m.m11 = matrixAsArray[5];
+        m.m12 = matrixAsArray[6];
+        m.m13 = matrixAsArray[7];
+        m.m20 = matrixAsArray[8];
+        m.m21 = matrixAsArray[9];
+        m.m22 = matrixAsArray[10];
+        m.m23 = matrixAsArray[11];
+        m.m30 = matrixAsArray[12];
+        m.m31 = matrixAsArray[13];
+        m.m32 = matrixAsArray[14];
+        m.m33 = matrixAsArray[15];
+
+        return m;
     }
 }

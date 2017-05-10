@@ -7,12 +7,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Runtime.InteropServices;
 
 using Windows.Devices.Enumeration;
 using Windows.Media.Capture;
 using Windows.Media.Capture.Frames;
 using Windows.Media.MediaProperties;
 using Windows.Media.Effects;
+using Windows.Perception.Spatial;
 using Windows.Foundation.Collections;
 using Windows.Foundation;
 using System.Diagnostics;
@@ -106,6 +108,15 @@ namespace HoloLensCameraStream
             get
             {
                 return _frameReader != null;
+            }
+        }
+
+        internal SpatialCoordinateSystem worldOrigin { get; private set; }
+        public IntPtr WorldOriginPtr
+        {
+            set
+            {
+                worldOrigin = (SpatialCoordinateSystem)Marshal.GetObjectForIUnknown(value);
             }
         }
 
@@ -281,7 +292,7 @@ namespace HoloLensCameraStream
                 {
                     if (frameReference != null)
                     {
-                        onFrameSampleAcquired.Invoke(new VideoCaptureSample(frameReference));
+                        onFrameSampleAcquired.Invoke(new VideoCaptureSample(frameReference, worldOrigin));
                     }
                     else
                     {
@@ -358,7 +369,7 @@ namespace HoloLensCameraStream
             {
                 if (frameReference != null)
                 {
-                    var sample = new VideoCaptureSample(frameReference);
+                    var sample = new VideoCaptureSample(frameReference, worldOrigin);
                     FrameSampleAcquired?.Invoke(sample);
                 }
             }

@@ -9,6 +9,7 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices.WindowsRuntime;
 
+using Windows.Perception.Spatial;
 using Windows.Graphics.Imaging;
 using Windows.Media.Capture.Frames;
 
@@ -27,6 +28,12 @@ namespace HoloLensCameraStream
         /// See https://developer.microsoft.com/en-us/windows/mixed-reality/locatable_camera#locating_the_device_camera_in_the_world
         /// </summary>
         static Guid projectionTransformGuid = new Guid("47F9FCB5-2A02-4F26-A477-792FDF95886A");
+
+        /// <summary>
+        /// The guid for getting the camera coordinate system for the frame sample.
+        /// See https://developer.microsoft.com/en-us/windows/mixed-reality/locatable_camera#locating_the_device_camera_in_the_world
+        /// </summary>
+        static Guid cameraCoordinateSystemGuid = new Guid("9D13C82F-2199-4E67-91CD-D1A4181F2534");
 
         /// <summary>
         /// How many bytes are in the frame.
@@ -61,6 +68,8 @@ namespace HoloLensCameraStream
 
         //Internal members
 
+        internal SpatialCoordinateSystem worldOrigin { get; private set; }
+
         internal SoftwareBitmap bitmap { get; private set; }
 
         internal bool isBitmapCopied { get; private set; }
@@ -69,7 +78,7 @@ namespace HoloLensCameraStream
 
         MediaFrameReference frameReference;
 
-        internal VideoCaptureSample(MediaFrameReference frameReference)
+        internal VideoCaptureSample(MediaFrameReference frameReference, SpatialCoordinateSystem worldOrigin)
         {
             if (frameReference == null)
             {
@@ -77,11 +86,9 @@ namespace HoloLensCameraStream
             }
 
             this.frameReference = frameReference;
-            bitmap = frameReference.VideoMediaFrame.SoftwareBitmap;
+            this.worldOrigin = worldOrigin;
 
-            //TODO: Get location data
-            //var transformMatrix = frameReference.Properties[TransformMatrixGuid] as SomeMatrixOrArray;
-            //var projectionMatrix = frameReference.Properties[ProjectionMatrixGuid] as SomeMatrixOrArray;
+            bitmap = frameReference.VideoMediaFrame.SoftwareBitmap;
         }
 
         /// <summary>
@@ -125,34 +132,78 @@ namespace HoloLensCameraStream
         /// <param name="matrix">The transform matrix used to convert between coordinate spaces.
         /// The matrix will have to be converted to a Unity matrix before it can be used by methods in the UnityEngine namespace.
         /// See https://forum.unity3d.com/threads/locatable-camera-in-unity.398803/ for details.</param>
-        public byte[] TryGetCameraToWorldMatrix()
+        public bool TryGetCameraToWorldMatrix(out float[] outMatrix)
         {
-            //TODO: Figure out how to use a Unity matrix in a plugin.
             if (frameReference.Properties.ContainsKey(viewTransformGuid) == false)
             {
-                return GetIdentityMatrixByteArray();
+                outMatrix = GetIdentityMatrixFloatArray();
+                return false;
             }
 
-            return frameReference.Properties[viewTransformGuid] as byte[];
+            if (worldOrigin == null)
+            {
+                outMatrix = GetIdentityMatrixFloatArray();
+                return false;
+            }
+            
+            Matrix4x4 cameraViewTransform = ConvertByteArrayToMatrix4x4(frameReference.Properties[viewTransformGuid] as byte[]);
+            if (cameraViewTransform == null)
+            {
+                outMatrix = GetIdentityMatrixFloatArray();
+                return false;
+            }
+
+            SpatialCoordinateSystem cameraCoordinateSystem = frameReference.Properties[cameraCoordinateSystemGuid] as SpatialCoordinateSystem;
+            if (cameraCoordinateSystem == null)
+            {
+                outMatrix = GetIdentityMatrixFloatArray();
+                return false;
+            }
+
+            Matrix4x4? cameraCoordsToUnityCoordsMatrix = cameraCoordinateSystem.TryGetTransformTo(worldOrigin);
+            if (cameraCoordsToUnityCoordsMatrix == null)
+            {
+                outMatrix = GetIdentityMatrixFloatArray();
+                return false;
+            }
+
+            Matrix4x4 worldToViewInCameraCoordsMatrix;
+            Matrix4x4.Invert(cameraViewTransform, out worldToViewInCameraCoordsMatrix);
+            Matrix4x4 worldToViewInUnityCoordsMatrix = Matrix4x4.Multiply(cameraCoordsToUnityCoordsMatrix.Value, worldToViewInCameraCoordsMatrix);
+            Matrix4x4 viewToWorldInCameraCoordsMatrix = Matrix4x4.Transpose(worldToViewInUnityCoordsMatrix);
+
+            viewToWorldInCameraCoordsMatrix.M31 *= -1f;
+            viewToWorldInCameraCoordsMatrix.M32 *= -1f;
+            viewToWorldInCameraCoordsMatrix.M33 *= -1f;
+            viewToWorldInCameraCoordsMatrix.M34 *= -1f;
+
+            outMatrix = ConvertMatrixToFloatArray(viewToWorldInCameraCoordsMatrix);
+            return true;
         }
 
         /// <summary>
-        /// This returns the transform matrix at the time the photo was captured, if location data if available.
+        /// This returns the projection matrix at the time the photo was captured, if location data if available.
         /// If it's not, that is probably an indication that the HoloLens is not tracking and its location is not known.
         /// It could also mean the VideoCapture stream is not running.
-        /// If location data is unavailable then the camera to world matrix will be set to the identity matrix.
+        /// If location data is unavailable then the projecgtion matrix will be set to the identity matrix.
         /// </summary>
         /// <param name="matrix">The projection matrix used to match the true camera projection.
         /// The matrix will have to be converted to a Unity matrix before it can be used by methods in the UnityEngine namespace.
         /// See https://forum.unity3d.com/threads/locatable-camera-in-unity.398803/ for details.</param>
-        public byte[] TryGetProjectionMatrix()
+        public bool TryGetProjectionMatrix(out float[] outMatrix)
         {
             if (frameReference.Properties.ContainsKey(projectionTransformGuid) == false)
             {
-                return GetIdentityMatrixByteArray();
+                outMatrix = GetIdentityMatrixFloatArray();
+                return false;
             }
 
-            return frameReference.Properties[projectionTransformGuid] as byte[];
+            Matrix4x4 projectionMatrix = ConvertByteArrayToMatrix4x4(frameReference.Properties[projectionTransformGuid] as byte[]);
+            
+            // Transpose matrix to match expected Unity format
+            projectionMatrix = Matrix4x4.Transpose(projectionMatrix);
+            outMatrix = ConvertMatrixToFloatArray(projectionMatrix);
+            return true;
         }
 
         /// <summary>
@@ -172,6 +223,15 @@ namespace HoloLensCameraStream
         {
             bitmap.Dispose();
             frameReference.Dispose();
+        }
+
+        private float[] ConvertMatrixToFloatArray(Matrix4x4 matrix)
+        {
+            return new float[16] {
+                matrix.M11, matrix.M12, matrix.M13, matrix.M14,
+                matrix.M21, matrix.M22, matrix.M23, matrix.M24,
+                matrix.M31, matrix.M32, matrix.M33, matrix.M34,
+                matrix.M41, matrix.M42, matrix.M43, matrix.M44 };
         }
 
         private Matrix4x4 ConvertByteArrayToMatrix4x4(byte[] matrixAsBytes)
@@ -219,12 +279,14 @@ namespace HoloLensCameraStream
             }
         }
 
-        /// <summary>
-        /// We're not yet returning real matrices from the plugin to Unity. Until we do that, we're passing byte[].
-        /// </summary>
         static byte[] GetIdentityMatrixByteArray()
         {
             return new byte[] { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+        }
+
+        static float[] GetIdentityMatrixFloatArray()
+        {
+            return new float[] { 1f, 0, 0, 0, 0, 1f, 0, 0, 0, 0, 1f, 0, 0, 0, 0, 1f };
         }
     }
 }
