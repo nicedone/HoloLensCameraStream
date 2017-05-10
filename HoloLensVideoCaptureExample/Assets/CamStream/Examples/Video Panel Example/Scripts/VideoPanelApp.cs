@@ -122,9 +122,17 @@ public class VideoPanelApp : MonoBehaviour
             _videoPanelUI.SetBytes(_latestImageBytes);
         }, false);
     }
-
+    
+    /// <summary>
+    /// Helper method for converting into UnityEngine.Matrix4x4
+    /// </summary>
+    /// <param name="matrixAsArray"></param>
+    /// <returns></returns>
     Matrix4x4 ConvertFloatArrayToMatrix4x4(float[] matrixAsArray)
     {
+        //There is probably a better way to be doing this but System.Numerics.Matrix4x4 is not available 
+        //in Unity and we do not include UnityEngine in the plugin.
+
         Matrix4x4 m = new Matrix4x4();
         m.m00 = matrixAsArray[0];
         m.m01 = matrixAsArray[1];
