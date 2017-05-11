@@ -1,20 +1,11 @@
-﻿//  
-// Copyright (c) 2017 Vulcan, Inc. All rights reserved.  
-// Licensed under the Apache 2.0 license. See LICENSE file in the project root for full license information.
-//
-
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.VR.WSA;
 
 using System;
 
 using HoloLensCameraStream;
 
-/// <summary>
-/// This example gets the video frames at 30 fps and displays them on a Unity texture,
-/// which is locked the User's gaze.
-/// </summary>
-public class VideoPanelApp : MonoBehaviour
+public class MatrixUsageApp : MonoBehaviour
 {
     byte[] _latestImageBytes;
     HoloLensCameraStream.Resolution _resolution;
@@ -22,8 +13,9 @@ public class VideoPanelApp : MonoBehaviour
     //"Injected" objects.
     VideoPanel _videoPanelUI;
     VideoCapture _videoCapture;
+    IndicatorDisplay _targetIndicator;
 
-    IntPtr _spatialCoordinateSystemPtr; 
+    IntPtr _spatialCoordinateSystemPtr;
 
     void Start()
     {
@@ -36,6 +28,7 @@ public class VideoPanelApp : MonoBehaviour
         //CameraStreamManager.Instance.GetVideoCaptureAsync(v => videoCapture = v);
 
         _videoPanelUI = GameObject.FindObjectOfType<VideoPanel>();
+        _targetIndicator = GameObject.FindObjectOfType<IndicatorDisplay>();
     }
 
     private void OnDestroy()
@@ -54,7 +47,7 @@ public class VideoPanelApp : MonoBehaviour
             Debug.LogError("Did not find a video capture object. You may not be using the HoloLens.");
             return;
         }
-        
+
         this._videoCapture = videoCapture;
 
         //Request the spatial coordinate ptr if you want fetch the camera and set it if you need to 
@@ -71,7 +64,7 @@ public class VideoPanelApp : MonoBehaviour
         cameraParams.cameraResolutionWidth = _resolution.width;
         cameraParams.frameRate = Mathf.RoundToInt(frameRate);
         cameraParams.pixelFormat = CapturePixelFormat.BGRA32;
-        cameraParams.rotateImage180Degrees = true; //If your image is upside down, remove this line.
+        cameraParams.rotateImage180Degrees = false; //If your image is upside down, remove this line.
         cameraParams.enableHolograms = false;
 
         UnityEngine.WSA.Application.InvokeOnAppThread(() => { _videoPanelUI.SetResolution(_resolution.width, _resolution.height); }, false);
@@ -90,6 +83,7 @@ public class VideoPanelApp : MonoBehaviour
         Debug.Log("Video capture started.");
     }
 
+    // Everything above here is boilerplate from the VideoPanelApp.cs project
     void OnFrameSampleAcquired(VideoCaptureSample sample)
     {
         //When copying the bytes out of the buffer, you must supply a byte[] that is appropriately sized.
@@ -99,27 +93,45 @@ public class VideoPanelApp : MonoBehaviour
             _latestImageBytes = new byte[sample.dataLength];
         }
         sample.CopyRawImageDataIntoBuffer(_latestImageBytes);
-        
+
         //If you need to get the cameraToWorld matrix for purposes of compositing you can do it like this
-        float[] cameraToWorldMatrix;
-        if (sample.TryGetCameraToWorldMatrix(out cameraToWorldMatrix) == false)
+        float[] cameraToWorldMatrixAsFloat;
+        if (sample.TryGetCameraToWorldMatrix(out cameraToWorldMatrixAsFloat) == false)
         {
             return;
         }
 
         //If you need to get the projection matrix for purposes of compositing you can do it like this
-        float[] projectionMatrix;
-        if (sample.TryGetProjectionMatrix(out projectionMatrix) == false)
+        float[] projectionMatrixAsFloat;
+        if (sample.TryGetProjectionMatrix(out projectionMatrixAsFloat) == false)
         {
             return;
         }
 
-        sample.Dispose();
+        // Right now we pass things across the pipe as a float array then convert them back into UnityEngine.Matrix using a utility method
+        Matrix4x4 cameraToWorldMatrix = LocatableCameraUtils.ConvertFloatArrayToMatrix4x4(cameraToWorldMatrixAsFloat);
+        Matrix4x4 projectionMatrix = LocatableCameraUtils.ConvertFloatArrayToMatrix4x4(projectionMatrixAsFloat);
 
         //This is where we actually use the image data
         UnityEngine.WSA.Application.InvokeOnAppThread(() =>
         {
             _videoPanelUI.SetBytes(_latestImageBytes);
+
+            Vector3 inverseNormal = LocatableCameraUtils.GetNormalOfPose(cameraToWorldMatrix);
+            Vector3 imagePosition = cameraToWorldMatrix.MultiplyPoint(Vector3.zero);
+
+            // Throw out an indicator in the composite space 2 meters in front of us using the corresponding view matrices
+            float distanceToMarker = 2f;
+            Vector3 pointOnFaceBoxPlane = imagePosition - inverseNormal * distanceToMarker;
+            Plane surfacePlane = new Plane(inverseNormal, pointOnFaceBoxPlane);
+
+            Vector2 targetPoint = new Vector2(_resolution.width * 0.5f, _resolution.height * 0.5f);
+            Vector3 mdPoint = LocatableCameraUtils.PixelCoordToWorldCoord(cameraToWorldMatrix, projectionMatrix, _resolution, targetPoint, surfacePlane);
+
+            _targetIndicator.SetPosition(mdPoint);
+            _targetIndicator.SetText("P");
+
+            _videoPanelUI.gameObject.SetActive(false);
         }, false);
     }
 }

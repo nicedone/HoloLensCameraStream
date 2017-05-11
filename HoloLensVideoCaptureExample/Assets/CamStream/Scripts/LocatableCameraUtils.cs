@@ -9,41 +9,27 @@ using UnityEngine;
 
 public static class LocatableCameraUtils
 {
-    public static Vector3 PixelCoordToWorldCoord(Matrix4x4 viewTransform, Matrix4x4 projectionTransform, HoloLensCameraStream.Resolution resolution, Vector2 pixelCoordinates, float depthOffset = 0, Vector3? referenceDepthPoint = null)
+    //This method is still in progress
+    public static Vector3 PixelCoordToWorldCoord(Matrix4x4 cameraToWorldMatrix, Matrix4x4 projectionMatrix, HoloLensCameraStream.Resolution cameraResolution, Vector2 pixelCoordinates, Plane depthPlane)
     {
-        //TODO: This whole function is in progress and needs to be understood and fixed. It doesn't work properly.
+        pixelCoordinates = ConvertPixelCoordsToScaledCoords(pixelCoordinates, cameraResolution);
 
-        pixelCoordinates = ConvertPixelCoordsToScaledCoords(pixelCoordinates, resolution);
+        float focalLengthX = projectionMatrix.GetColumn(0).x;
+        float focalLengthY = projectionMatrix.GetColumn(1).y;
+        Vector3 dirRay = new Vector3(pixelCoordinates.x / focalLengthX, pixelCoordinates.y / focalLengthY, 1.0f).normalized; //Direction is in camera space
+        Vector3 centerPosition = cameraToWorldMatrix.MultiplyPoint(Vector3.zero);
+        Vector3 direction = new Vector3(Vector3.Dot(dirRay, cameraToWorldMatrix.GetRow(0)), Vector3.Dot(dirRay, cameraToWorldMatrix.GetRow(1)), Vector3.Dot(dirRay, cameraToWorldMatrix.GetRow(2)));
+        
+        float depth = 1f;
+        Ray ray = new Ray(centerPosition, direction * -1);
+        depthPlane.Raycast(ray, out depth);
 
-        float focalLengthX = projectionTransform.GetColumn(0).x;
-        float focalLengthY = projectionTransform.GetColumn(1).y;
-        float centerOffsetX = projectionTransform.m20;
-        float centerOffsetY = projectionTransform.m21;
-        var dirRay = new Vector3(pixelCoordinates.x / focalLengthX, pixelCoordinates.y / focalLengthY, 1.0f).normalized; //Direction is in camera space
-        var cameraPositionOffset = new Vector3(centerOffsetX / 2f, centerOffsetY / 2f);
-        Vector3 centerPosition = viewTransform.MultiplyPoint(cameraPositionOffset);
-        //centerPosition += frameSample.worldPosition;
-        var direction = new Vector3(Vector3.Dot(dirRay, viewTransform.GetRow(0)), Vector3.Dot(dirRay, viewTransform.GetRow(1)), Vector3.Dot(dirRay, viewTransform.GetRow(2)));
+        return centerPosition - direction * depth;
+    }
 
-        //Quaternion rotation = Quaternion.LookRotation(-cameraToWorldMatrix.GetColumn(2), cameraToWorldMatrix.GetColumn(1));
-        var ray = new Ray(centerPosition, direction);
-
-        var depth = 1f;
-        if (referenceDepthPoint.HasValue == false)
-        {
-            RaycastHit hit;
-            if (Physics.Raycast(ray, out hit))
-            {
-                depth = Vector3.Magnitude(hit.point - centerPosition);
-            }
-        }
-        else
-        {
-            depth = Vector3.Magnitude(referenceDepthPoint.Value - centerPosition);
-        }
-        depth -= depthOffset;
-
-        return centerPosition + direction * depth;
+    public static Vector3 GetNormalOfPose(Matrix4x4 pose)
+    {
+        return new Vector3(Vector3.Dot(Vector3.forward, pose.GetRow(0)), Vector3.Dot(Vector3.forward, pose.GetRow(1)), Vector3.Dot(Vector3.forward, pose.GetRow(2)));
     }
 
     public static Quaternion GetRotationFacingView(Matrix4x4 viewTransform)
@@ -74,31 +60,36 @@ public static class LocatableCameraUtils
             m33 = inMatrix[15]
         };
         return outMatrix;
-
-        //Not sure yet...but the given array might require that we transpose the Unity matrix to make it correct.
-        //It seems that C# Matrices are "row major" and Unity Matrices are "column major".
-        //return result.transpose; 
     }
 
-    public static Matrix4x4 ProcessRawViewTransform(byte[] inMatrix)
+    /// <summary>
+    /// Helper method for converting into UnityEngine.Matrix4x4
+    /// </summary>
+    /// <param name="matrixAsArray"></param>
+    /// <returns></returns>
+    public static Matrix4x4 ConvertFloatArrayToMatrix4x4(float[] matrixAsArray)
     {
-        //TODO: Understand and verify that this is the proper way to change the view transform matrix.
+        //There is probably a better way to be doing this but System.Numerics.Matrix4x4 is not available 
+        //in Unity and we do not include UnityEngine in the plugin.
+        Matrix4x4 m = new Matrix4x4();
+        m.m00 = matrixAsArray[0];
+        m.m01 = matrixAsArray[1];
+        m.m02 = matrixAsArray[2];
+        m.m03 = matrixAsArray[3];
+        m.m10 = matrixAsArray[4];
+        m.m11 = matrixAsArray[5];
+        m.m12 = matrixAsArray[6];
+        m.m13 = matrixAsArray[7];
+        m.m20 = matrixAsArray[8];
+        m.m21 = matrixAsArray[9];
+        m.m22 = matrixAsArray[10];
+        m.m23 = matrixAsArray[11];
+        m.m30 = matrixAsArray[12];
+        m.m31 = matrixAsArray[13];
+        m.m32 = matrixAsArray[14];
+        m.m33 = matrixAsArray[15];
 
-        Matrix4x4 outMatrix = BytesToMatrix(inMatrix);
-
-        Matrix4x4 zflip = Matrix4x4.identity;
-        zflip.SetColumn(2, -1 * zflip.GetColumn(2));
-
-        return zflip * outMatrix * zflip;
-    }
-
-    public static Matrix4x4 ProcessRawProjectionTransform(byte[] inMatrix)
-    {
-        Matrix4x4 outMatrix = BytesToMatrix(inMatrix);
-
-        //TODO: Some stuff might have to be done here.
-
-        return outMatrix;
+        return m;
     }
 
     /// <summary>
