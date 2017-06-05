@@ -176,6 +176,9 @@ namespace HoloLensCameraStream
             Matrix4x4 viewToWorldInUnityCoordsMatrix = Matrix4x4.Multiply(cameraCoordsToUnityCoords, viewToWorldInCameraCoordsMatrix);
 
             // Change from right handed coordinate system to left handed UnityEngine
+            viewToWorldInUnityCoordsMatrix.M31 *= -1f;
+            viewToWorldInUnityCoordsMatrix.M32 *= -1f;
+            viewToWorldInUnityCoordsMatrix.M33 *= -1f;
             viewToWorldInUnityCoordsMatrix.M34 *= -1f;
 
             outMatrix = ConvertMatrixToFloatArray(viewToWorldInUnityCoordsMatrix);
