@@ -73,6 +73,7 @@ Shader "AR/HolographicImageBlend"
                 // Currently our signedUV's x and y coordinates will fall between -1 and 1.
                 // We need to map this range from 0 to 1 so that we can sample our texture.
                 float2 uv = signedUV * 0.5 + float2(0.5, 0.5);
+                uv.y = 1.0 - uv.y;
                 fixed4 finalColor = tex2D(_MainTex, uv);
  
                 // Finally add a circular vignette effect starting from the center
