@@ -5,9 +5,9 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
-  - enabled: 0
+  - enabled: 1
     path: Assets/CamStream/Examples/Video Panel Example/Video Panel Example.unity
     guid: e913caf645897db42bbdacb4893c11d6
-  - enabled: 1
+  - enabled: 0
     path: Assets/CamStream/Examples/Matrix Usage Example/Matrix Usage Example.unity
     guid: 412fd74fbf15aa44d9057de5b59b3275
