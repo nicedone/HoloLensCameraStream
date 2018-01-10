@@ -167,17 +167,22 @@ namespace HoloLensCameraStream
                 return false;
             }
 
-            Matrix4x4 worldToViewInCameraCoordsMatrix;
-            Matrix4x4.Invert(cameraViewTransform, out worldToViewInCameraCoordsMatrix);
-            Matrix4x4 worldToViewInUnityCoordsMatrix = Matrix4x4.Multiply(cameraCoordsToUnityCoordsMatrix.Value, worldToViewInCameraCoordsMatrix);
-            Matrix4x4 viewToWorldInCameraCoordsMatrix = Matrix4x4.Transpose(worldToViewInUnityCoordsMatrix);
+            // Transpose the matrices to obtain a proper transform matrix
+            cameraViewTransform = Matrix4x4.Transpose(cameraViewTransform);
+            Matrix4x4 cameraCoordsToUnityCoords = Matrix4x4.Transpose(cameraCoordsToUnityCoordsMatrix.Value);
 
-            viewToWorldInCameraCoordsMatrix.M31 *= -1f;
-            viewToWorldInCameraCoordsMatrix.M32 *= -1f;
-            viewToWorldInCameraCoordsMatrix.M33 *= -1f;
-            viewToWorldInCameraCoordsMatrix.M34 *= -1f;
+            Matrix4x4 viewToWorldInCameraCoordsMatrix;
+            Matrix4x4.Invert(cameraViewTransform, out viewToWorldInCameraCoordsMatrix);
+            Matrix4x4 viewToWorldInUnityCoordsMatrix = Matrix4x4.Multiply(cameraCoordsToUnityCoords, viewToWorldInCameraCoordsMatrix);
 
-            outMatrix = ConvertMatrixToFloatArray(viewToWorldInCameraCoordsMatrix);
+            // Change from right handed coordinate system to left handed UnityEngine
+            viewToWorldInUnityCoordsMatrix.M31 *= -1f;
+            viewToWorldInUnityCoordsMatrix.M32 *= -1f;
+            viewToWorldInUnityCoordsMatrix.M33 *= -1f;
+            viewToWorldInUnityCoordsMatrix.M34 *= -1f;
+
+            outMatrix = ConvertMatrixToFloatArray(viewToWorldInUnityCoordsMatrix);
+
             return true;
         }
 

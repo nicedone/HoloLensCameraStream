@@ -11,7 +11,9 @@ public class MatrixUsageApp : MonoBehaviour
     HoloLensCameraStream.Resolution _resolution;
 
     //"Injected" objects.
-    VideoPanel _videoPanelUI;
+    GameObject _videoPanelUI;
+    Renderer _videoPanelUIRenderer;
+    Texture2D _videoTexture;
     VideoCapture _videoCapture;
     IndicatorDisplay _targetIndicator;
 
@@ -27,7 +29,11 @@ public class MatrixUsageApp : MonoBehaviour
         //You could also do this "shortcut":
         //CameraStreamManager.Instance.GetVideoCaptureAsync(v => videoCapture = v);
 
-        _videoPanelUI = GameObject.FindObjectOfType<VideoPanel>();
+        _videoPanelUI = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        _videoPanelUI.name = "VideoPanelUI";
+        _videoPanelUIRenderer = _videoPanelUI.GetComponent<Renderer>() as Renderer;
+        _videoPanelUIRenderer.material = new Material(Shader.Find("AR/HolographicImageBlend"));
+
         _targetIndicator = GameObject.FindObjectOfType<IndicatorDisplay>();
     }
 
@@ -67,7 +73,7 @@ public class MatrixUsageApp : MonoBehaviour
         cameraParams.rotateImage180Degrees = false; //If your image is upside down, remove this line.
         cameraParams.enableHolograms = false;
 
-        UnityEngine.WSA.Application.InvokeOnAppThread(() => { _videoPanelUI.SetResolution(_resolution.width, _resolution.height); }, false);
+        UnityEngine.WSA.Application.InvokeOnAppThread(() => { _videoTexture = new Texture2D(_resolution.width, _resolution.height, TextureFormat.BGRA32, false); }, false);
 
         videoCapture.StartVideoModeAsync(cameraParams, OnVideoModeStarted);
     }
@@ -83,7 +89,6 @@ public class MatrixUsageApp : MonoBehaviour
         Debug.Log("Video capture started.");
     }
 
-    // Everything above here is boilerplate from the VideoPanelApp.cs project
     void OnFrameSampleAcquired(VideoCaptureSample sample)
     {
         //When copying the bytes out of the buffer, you must supply a byte[] that is appropriately sized.
@@ -113,25 +118,26 @@ public class MatrixUsageApp : MonoBehaviour
         Matrix4x4 projectionMatrix = LocatableCameraUtils.ConvertFloatArrayToMatrix4x4(projectionMatrixAsFloat);
 
         //This is where we actually use the image data
+        //TODO: Create a class like VideoPanel for the next code
         UnityEngine.WSA.Application.InvokeOnAppThread(() =>
         {
-            _videoPanelUI.SetBytes(_latestImageBytes);
+            _videoTexture.LoadRawTextureData(_latestImageBytes);
+            _videoTexture.wrapMode = TextureWrapMode.Clamp;
+            _videoTexture.Apply();
 
-            Vector3 inverseNormal = LocatableCameraUtils.GetNormalOfPose(cameraToWorldMatrix);
-            Vector3 imagePosition = cameraToWorldMatrix.MultiplyPoint(Vector3.zero);
+            _videoPanelUIRenderer.sharedMaterial.SetTexture("_MainTex", _videoTexture);
+            _videoPanelUIRenderer.sharedMaterial.SetMatrix("_WorldToCameraMatrix", cameraToWorldMatrix.inverse);
+            _videoPanelUIRenderer.sharedMaterial.SetMatrix("_CameraProjectionMatrix", projectionMatrix);
+            _videoPanelUIRenderer.sharedMaterial.SetFloat("_VignetteScale", 1.3f);
 
-            // Throw out an indicator in the composite space 2 meters in front of us using the corresponding view matrices
-            float distanceToMarker = 2f;
-            Vector3 pointOnFaceBoxPlane = imagePosition - inverseNormal * distanceToMarker;
-            Plane surfacePlane = new Plane(inverseNormal, pointOnFaceBoxPlane);
+            
+            Vector3 inverseNormal = -cameraToWorldMatrix.GetColumn(2);
+            // Position the canvas object slightly in front of the real world web camera.
+            Vector3 imagePosition = cameraToWorldMatrix.GetColumn(3) - cameraToWorldMatrix.GetColumn(2);
 
-            Vector2 targetPoint = new Vector2(_resolution.width * 0.5f, _resolution.height * 0.5f);
-            Vector3 mdPoint = LocatableCameraUtils.PixelCoordToWorldCoord(cameraToWorldMatrix, projectionMatrix, _resolution, targetPoint, surfacePlane);
+            _videoPanelUI.gameObject.transform.position = imagePosition;
+            _videoPanelUI.gameObject.transform.rotation = Quaternion.LookRotation(inverseNormal, cameraToWorldMatrix.GetColumn(1));
 
-            _targetIndicator.SetPosition(mdPoint);
-            _targetIndicator.SetText("P");
-
-            _videoPanelUI.gameObject.SetActive(false);
         }, false);
     }
 }

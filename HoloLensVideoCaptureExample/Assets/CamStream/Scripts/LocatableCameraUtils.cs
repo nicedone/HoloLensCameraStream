@@ -9,22 +9,34 @@ using UnityEngine;
 
 public static class LocatableCameraUtils
 {
-    //This method is still in progress
-    public static Vector3 PixelCoordToWorldCoord(Matrix4x4 cameraToWorldMatrix, Matrix4x4 projectionMatrix, HoloLensCameraStream.Resolution cameraResolution, Vector2 pixelCoordinates, Plane depthPlane)
+    /// <summary>
+    /// Helper method for pixel projection into Unity3D world space.
+    /// This method return a Vector3 with direction: optical center of the camera to the pixel coordinate
+    /// The method is based on: https://developer.microsoft.com/en-us/windows/mixed-reality/locatable_camera#pixel_to_application-specified_coordinate_system
+    /// </summary>
+    /// <param name="cameraToWorldMatrix">The camera to Unity world matrix.</param>
+    /// <param name="projectionMatrix">Projection Matrix.</param>
+    /// <param name="pixelCoordinates">The coordinate of the pixel that should be converted to world-space.</param>
+    /// <param name="cameraResolution">The resolution of the image that the pixel came from.</param>
+    /// <returns>Vector3 with direction: optical center to camera world-space coordinates</returns>
+    public static Vector3 PixelCoordToWorldCoord(Matrix4x4 cameraToWorldMatrix, Matrix4x4 projectionMatrix, HoloLensCameraStream.Resolution cameraResolution, Vector2 pixelCoordinates)
     {
-        pixelCoordinates = ConvertPixelCoordsToScaledCoords(pixelCoordinates, cameraResolution);
+        pixelCoordinates = ConvertPixelCoordsToScaledCoords(pixelCoordinates, cameraResolution); // -1 to 1 coords
 
         float focalLengthX = projectionMatrix.GetColumn(0).x;
         float focalLengthY = projectionMatrix.GetColumn(1).y;
-        Vector3 dirRay = new Vector3(pixelCoordinates.x / focalLengthX, pixelCoordinates.y / focalLengthY, 1.0f).normalized; //Direction is in camera space
-        Vector3 centerPosition = cameraToWorldMatrix.MultiplyPoint(Vector3.zero);
-        Vector3 direction = new Vector3(Vector3.Dot(dirRay, cameraToWorldMatrix.GetRow(0)), Vector3.Dot(dirRay, cameraToWorldMatrix.GetRow(1)), Vector3.Dot(dirRay, cameraToWorldMatrix.GetRow(2)));
-        
-        float depth = 1f;
-        Ray ray = new Ray(centerPosition, direction * -1);
-        depthPlane.Raycast(ray, out depth);
+        float centerX = projectionMatrix.GetColumn(2).x;
+        float centerY = projectionMatrix.GetColumn(2).y;
 
-        return centerPosition - direction * depth;
+        // On Microsoft Webpage the centers are normalized 
+        float normFactor = projectionMatrix.GetColumn(2).z;
+        centerX = centerX / normFactor;
+        centerY = centerY / normFactor;
+
+        Vector3 dirRay = new Vector3((pixelCoordinates.x - centerX) / focalLengthX, (pixelCoordinates.y - centerY) / focalLengthY, 1.0f / normFactor); //Direction is in camera space
+        Vector3 direction = new Vector3(Vector3.Dot(cameraToWorldMatrix.GetRow(0), dirRay), Vector3.Dot(cameraToWorldMatrix.GetRow(1), dirRay), Vector3.Dot(cameraToWorldMatrix.GetRow(2), dirRay));
+
+        return direction;
     }
 
     public static Vector3 GetNormalOfPose(Matrix4x4 pose)
