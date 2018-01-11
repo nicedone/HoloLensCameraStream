@@ -21,11 +21,11 @@ public class RaycastLaser : MonoBehaviour {
 
         // Set Material
         lr.material = mat == null ? _laserMaterial : mat;
-
-        Ray ray = new Ray(from, direction);
+        
         Vector3 to = from + length * direction;
 
         // Use this code when hit on mesh surface
+        //Ray ray = new Ray(from, direction);
         //RaycastHit hit;
         //if(Physics.Raycast(ray, out hit, length))
         //    to = hit.point;

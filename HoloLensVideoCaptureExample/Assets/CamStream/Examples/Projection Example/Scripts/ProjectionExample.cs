@@ -3,7 +3,7 @@ using HoloLensCameraStream;
 using System;
 using System.Collections.Generic;
 using System.Collections;
-using UnityEngine.VR.WSA.Input;
+
 
 /// <summary>
 /// In this example, we back-project to the 3D world 5 pixels, which are the principal point and the image corners,
@@ -24,7 +24,7 @@ public class ProjectionExample : MonoBehaviour {
     private IntPtr _spatialCoordinateSystemPtr;
     private byte[] _latestImageBytes;
     private bool stopVideo;
-    private GestureRecognizer _gestureRecognizer;
+    private UnityEngine.XR.WSA.Input.GestureRecognizer _gestureRecognizer;
 
     // Frame gameobject, renderer and texture
     private GameObject _picture;
@@ -43,16 +43,16 @@ public class ProjectionExample : MonoBehaviour {
     void Awake()
     {
         // Create and set the gesture recognizer
-        _gestureRecognizer = new GestureRecognizer();
-        _gestureRecognizer.TappedEvent += (source, tapCount, headRay) => { Debug.Log("Tapped"); StartCoroutine(StopVideoMode()); };
-        _gestureRecognizer.SetRecognizableGestures(GestureSettings.Tap);
+        _gestureRecognizer = new UnityEngine.XR.WSA.Input.GestureRecognizer();
+        _gestureRecognizer.Tapped += (args) => { Debug.Log("Tapped"); StartCoroutine(StopVideoMode()); };
+        _gestureRecognizer.SetRecognizableGestures(UnityEngine.XR.WSA.Input.GestureSettings.Tap);
         _gestureRecognizer.StartCapturingGestures();
     }
 
 	void Start() 
     {
         //Fetch a pointer to Unity's spatial coordinate system if you need pixel mapping
-        _spatialCoordinateSystemPtr = UnityEngine.VR.WSA.WorldManager.GetNativeISpatialCoordinateSystemPtr();
+        _spatialCoordinateSystemPtr = UnityEngine.XR.WSA.WorldManager.GetNativeISpatialCoordinateSystemPtr();
 	    CameraStreamHelper.Instance.GetVideoCaptureAsync(OnVideoCaptureCreated);
 
         // Create the frame container and apply HolographicImageBlend shader
@@ -107,7 +107,10 @@ public class ProjectionExample : MonoBehaviour {
         cameraParams.frameRate = Mathf.RoundToInt(frameRate);
         cameraParams.pixelFormat = CapturePixelFormat.BGRA32;
 
-        UnityEngine.WSA.Application.InvokeOnAppThread(() => { _pictureTexture = new Texture2D(_resolution.width, _resolution.height, TextureFormat.BGRA32, false); }, false);
+        ThreadUtils.Instance.InvokeOnMainThread(() =>
+        {
+             _pictureTexture = new Texture2D(_resolution.width, _resolution.height, TextureFormat.BGRA32, false);
+        });
 
         _videoCapture.StartVideoModeAsync(cameraParams, OnVideoModeStarted);
     }
@@ -143,7 +146,7 @@ public class ProjectionExample : MonoBehaviour {
         Matrix4x4 camera2WorldMatrix = LocatableCameraUtils.ConvertFloatArrayToMatrix4x4(s.camera2WorldMatrix);
         Matrix4x4 projectionMatrix = LocatableCameraUtils.ConvertFloatArrayToMatrix4x4(s.projectionMatrix);
 
-        UnityEngine.WSA.Application.InvokeOnAppThread(() =>
+        ThreadUtils.Instance.InvokeOnMainThread(() =>
         {
             // Upload bytes to texture
             _pictureTexture.LoadRawTextureData(s.data);
@@ -163,7 +166,7 @@ public class ProjectionExample : MonoBehaviour {
             _picture.transform.position = imagePosition;
             _picture.transform.rotation = Quaternion.LookRotation(inverseNormal, camera2WorldMatrix.GetColumn(1));
 
-        }, false);
+        });
 
         // Stop the video and reproject the 5 pixels
         if(stopVideo)
@@ -177,7 +180,7 @@ public class ProjectionExample : MonoBehaviour {
             Vector3 imageBotLeftDirection = LocatableCameraUtils.PixelCoordToWorldCoord(camera2WorldMatrix, projectionMatrix, _resolution, new Vector2(0 , _resolution.height));
             Vector3 imageBotRightDirection = LocatableCameraUtils.PixelCoordToWorldCoord(camera2WorldMatrix, projectionMatrix, _resolution, new Vector2(_resolution.width, _resolution.height));
 
-            UnityEngine.WSA.Application.InvokeOnAppThread(() => 
+            ThreadUtils.Instance.InvokeOnMainThread(() =>
             { 
                 // Paint the rays on the 3d world
                 _laser.shootLaserFrom(camera2WorldMatrix.GetColumn(3), imageCenterDirection, 10f, _centerMaterial);
@@ -186,7 +189,7 @@ public class ProjectionExample : MonoBehaviour {
                 _laser.shootLaserFrom(camera2WorldMatrix.GetColumn(3), imageBotLeftDirection, 10f, _botLeftMaterial);
                 _laser.shootLaserFrom(camera2WorldMatrix.GetColumn(3), imageBotRightDirection, 10f, _botRightMaterial);
 
-            }, false);
+            });
         }
     }
 
