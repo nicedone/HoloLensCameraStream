@@ -245,19 +245,24 @@ namespace HoloLensCameraStream
             _frameReader = await _mediaCapture.CreateFrameReaderAsync(mediaFrameSource, pixelFormat);
             _frameReader.FrameArrived += HandleFrameArrived;
             await _frameReader.StartAsync();
-            VideoEncodingProperties properties = GetVideoEncodingPropertiesForCameraParams(setupParams);
+            
+            VideoEncodingProperties videoEncodingProperties = GetVideoEncodingPropertiesForCameraParams(setupParams);
+            videoEncodingProperties.Subtype = "H264";
+
+            //MediaEncodingProfile mediaEncodingProfile = MediaEncodingProfile.CreateMp4(VideoEncodingQuality.Auto);
+            //VideoEncodingProperties videoEncodingProperties = mediaEncodingProfile.Video;
 
             // Historical context: https://github.com/VulcanTechnologies/HoloLensCameraStream/issues/6
             if (setupParams.rotateImage180Degrees)
             {
-                properties.Properties.Add(ROTATION_KEY, 180);
+                videoEncodingProperties.Properties.Add(ROTATION_KEY, 180);
             }
 			
 			//	gr: taken from here https://forums.hololens.com/discussion/2009/mixedrealitycapture
 			IVideoEffectDefinition ved = new VideoMRCSettings( setupParams.enableHolograms, setupParams.enableVideoStabilization, setupParams.videoStabilizationBufferSize, setupParams.hologramOpacity );
 			await _mediaCapture.AddVideoEffectAsync(ved, MediaStreamType.VideoPreview);
         
-            await _mediaCapture.VideoDeviceController.SetMediaStreamPropertiesAsync(STREAM_TYPE, properties);
+            await _mediaCapture.VideoDeviceController.SetMediaStreamPropertiesAsync(STREAM_TYPE, videoEncodingProperties);
 
             onVideoModeStartedCallback?.Invoke(new VideoCaptureResult(0, ResultType.Success, true));
         }
@@ -353,8 +358,9 @@ namespace HoloLensCameraStream
                 VideoDeviceId = _deviceInfo.Id,
                 SourceGroup = _frameSourceGroup,
                 MemoryPreference = MediaCaptureMemoryPreference.Cpu, //TODO: Should this be the other option, Auto? GPU is not an option.
-                StreamingCaptureMode = StreamingCaptureMode.Video
+                StreamingCaptureMode = StreamingCaptureMode.Video,
             });
+
             _mediaCapture.VideoDeviceController.Focus.TrySetAuto(true);
         }
 
@@ -395,9 +401,24 @@ namespace HoloLensCameraStream
             {
                 throw new Exception("Could not find an encoding property set that matches the given camera parameters.");
             }
+
+            return allPropertySets.FirstOrDefault();
+        }
+
+        AudioEncodingProperties GetAudioEncodingProperties(string subtype)
+        {
+            var allPropertySets = _mediaCapture.AudioDeviceController.GetAvailableMediaStreamProperties(MediaStreamType.Audio).Select((x) => x as AudioEncodingProperties)
+                .Where((x) =>
+            {
+                return x.Subtype == subtype;
+            }); //Returns IEnumerable<VideoEncodingProperties>
+
+            if (allPropertySets.Count() == 0)
+            {
+                throw new Exception("Could not find an audio encoding property set that matches subtype " + subtype);
+            }
             
-            var chosenPropertySet = allPropertySets.FirstOrDefault();
-            return chosenPropertySet;
+            return allPropertySets.FirstOrDefault();
         }
 
         static bool IsColorVideo(MediaFrameSourceInfo sourceInfo)
