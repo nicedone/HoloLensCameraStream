@@ -18,8 +18,7 @@ using Windows.Perception.Spatial;
 using Windows.Foundation.Collections;
 using Windows.Foundation;
 using System.Diagnostics;
-
-
+using Windows.Media.Devices;
 
 namespace HoloLensCameraStream
 {
@@ -120,7 +119,7 @@ namespace HoloLensCameraStream
             }
         }
 
-        static readonly MediaStreamType STREAM_TYPE = MediaStreamType.VideoPreview;
+        static readonly MediaStreamType STREAM_TYPE = MediaStreamType.VideoRecord;
         static readonly Guid ROTATION_KEY = new Guid("C380465D-2271-428C-9B83-ECEA3B4A85C1");
 
         MediaFrameSourceGroup _frameSourceGroup;
@@ -145,7 +144,7 @@ namespace HoloLensCameraStream
         {
             var allFrameSourceGroups = await MediaFrameSourceGroup.FindAllAsync();                                              //Returns IReadOnlyList<MediaFrameSourceGroup>
             var candidateFrameSourceGroups = allFrameSourceGroups.Where(group => group.SourceInfos.Any(IsColorVideo));   //Returns IEnumerable<MediaFrameSourceGroup>
-            var selectedFrameSourceGroup = candidateFrameSourceGroups.FirstOrDefault();                                         //Returns a single MediaFrameSourceGroup
+            var selectedFrameSourceGroup = allFrameSourceGroups.FirstOrDefault();                                         //Returns a single MediaFrameSourceGroup
             
             if (selectedFrameSourceGroup == null)
             {
@@ -163,6 +162,8 @@ namespace HoloLensCameraStream
             
             var devices = await DeviceInformation.FindAllAsync(DeviceClass.VideoCapture);   //Returns DeviceCollection
             var deviceInformation = devices.FirstOrDefault();                               //Returns a single DeviceInformation
+
+            //TODO: When implementing audio, Get device information for DeviceClass.AudioCapture.
             
             if (deviceInformation == null)
             {
@@ -245,12 +246,19 @@ namespace HoloLensCameraStream
             _frameReader = await _mediaCapture.CreateFrameReaderAsync(mediaFrameSource, pixelFormat);
             _frameReader.FrameArrived += HandleFrameArrived;
             await _frameReader.StartAsync();
-            
-            VideoEncodingProperties videoEncodingProperties = GetVideoEncodingPropertiesForCameraParams(setupParams);
-            videoEncodingProperties.Subtype = "H264";
 
-            //MediaEncodingProfile mediaEncodingProfile = MediaEncodingProfile.CreateMp4(VideoEncodingQuality.Auto);
-            //VideoEncodingProperties videoEncodingProperties = mediaEncodingProfile.Video;
+            //VideoEncodingProperties videoEncodingProperties = GetVideoEncodingPropertiesForCameraParams(setupParams);
+            //videoEncodingProperties.Subtype = "H264";
+            
+            MediaEncodingProfile mediaEncodingProfile = MediaEncodingProfile.CreateMp4(VideoEncodingQuality.HD720p);
+            mediaEncodingProfile.Video.Width = 896;
+            mediaEncodingProfile.Video.Height = 504;
+            mediaEncodingProfile.Video.ProfileId = 77;
+            mediaEncodingProfile.Video.Bitrate = 162570240;
+            mediaEncodingProfile.Audio = null; //TODO: Delete this line when we implement audio.
+            mediaEncodingProfile.Container = null;
+            VideoEncodingProperties videoEncodingProperties = mediaEncodingProfile.Video;
+            //AudioEncodingProperties audioEncodingProperties = mediaEncodingProfile.Audio; //TODO: Turn this line back on when implementing audio streaming.
 
             // Historical context: https://github.com/VulcanTechnologies/HoloLensCameraStream/issues/6
             if (setupParams.rotateImage180Degrees)
@@ -259,10 +267,11 @@ namespace HoloLensCameraStream
             }
 			
 			//	gr: taken from here https://forums.hololens.com/discussion/2009/mixedrealitycapture
-			IVideoEffectDefinition ved = new VideoMRCSettings( setupParams.enableHolograms, setupParams.enableVideoStabilization, setupParams.videoStabilizationBufferSize, setupParams.hologramOpacity );
-			await _mediaCapture.AddVideoEffectAsync(ved, MediaStreamType.VideoPreview);
+			//IVideoEffectDefinition ved = new VideoMRCSettings( setupParams.enableHolograms, setupParams.enableVideoStabilization, setupParams.videoStabilizationBufferSize, setupParams.hologramOpacity );
+			//await _mediaCapture.AddVideoEffectAsync(ved, MediaStreamType.VideoRecord);
         
-            await _mediaCapture.VideoDeviceController.SetMediaStreamPropertiesAsync(STREAM_TYPE, videoEncodingProperties);
+            //await _mediaCapture.VideoDeviceController.SetMediaStreamPropertiesAsync(STREAM_TYPE, videoEncodingProperties);
+            await _mediaCapture.SetEncodingPropertiesAsync(STREAM_TYPE, videoEncodingProperties, new MediaPropertySet());
 
             onVideoModeStartedCallback?.Invoke(new VideoCaptureResult(0, ResultType.Success, true));
         }
@@ -356,12 +365,15 @@ namespace HoloLensCameraStream
             await _mediaCapture.InitializeAsync(new MediaCaptureInitializationSettings()
             {
                 VideoDeviceId = _deviceInfo.Id,
+                //TODO: To utilize audio, assign the audio device ID
                 SourceGroup = _frameSourceGroup,
                 MemoryPreference = MediaCaptureMemoryPreference.Cpu, //TODO: Should this be the other option, Auto? GPU is not an option.
-                StreamingCaptureMode = StreamingCaptureMode.Video,
+                StreamingCaptureMode = StreamingCaptureMode.Video, //TODO: To pass audio, change this value.
+                MediaCategory = MediaCategory.Communications,
             });
 
             _mediaCapture.VideoDeviceController.Focus.TrySetAuto(true);
+            _mediaCapture.VideoDeviceController.DesiredOptimization = MediaCaptureOptimization.LatencyThenQuality;
         }
 
         void HandleFrameArrived(MediaFrameReader sender, MediaFrameArrivedEventArgs args)
@@ -430,7 +442,9 @@ namespace HoloLensCameraStream
 
         static string ConvertCapturePixelFormatToMediaEncodingSubtype(CapturePixelFormat format)
         {
-            switch (format)
+            return MediaEncodingSubtypes.H264;
+
+            /*switch (format)
             {
                 case CapturePixelFormat.BGRA32:
                     return MediaEncodingSubtypes.Bgra8;
@@ -442,7 +456,7 @@ namespace HoloLensCameraStream
                     return MediaEncodingSubtypes.Png;
                 default:
                     return MediaEncodingSubtypes.Bgra8;
-            }
+            }*/
         }
     }
 

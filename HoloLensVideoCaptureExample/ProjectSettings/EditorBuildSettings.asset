@@ -11,3 +11,6 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/CamStream/Examples/Matrix Usage Example/Matrix Usage Example.unity
     guid: 412fd74fbf15aa44d9057de5b59b3275
+  - enabled: 0
+    path: Assets/CamStream/Examples/Projection Example/Projection Example.unity
+    guid: c26c9a511df0b8f4890621a3e15abdeb
